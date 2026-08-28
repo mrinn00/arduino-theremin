@@ -10,6 +10,8 @@ int volume_button_pin = 8;
 
 int record_button_pin = 6;
 
+int play_button_pin = 5;
+
 // notes in the melody:
 int melody[] = {
   NOTE_C5, NOTE_D5, NOTE_E5, NOTE_F5, NOTE_G5, NOTE_A5, NOTE_B5, NOTE_C6, NOTE_B0};
@@ -46,12 +48,21 @@ const int MAX_TIME = 10000;
 bool lastRecordButtonRead = HIGH;
 bool recordButtonPressed = false;
 
+// play button
+bool lastPlayButtonRead = HIGH;
+bool playButtonPressed = false;
+
+int playNoteIndex = 0;
+unsigned long playNoteStartTime = 0;
+
 
 enum State {
   THEREMIN_STATE,
   RECORD_STATE,
   PLAY_STATE
 };
+
+State previousState = THEREMIN_STATE;
 
 State currentState = THEREMIN_STATE;
 
@@ -77,6 +88,7 @@ void setup() {
   delay(1000);
   pinMode(volume_button_pin, INPUT_PULLUP);
   pinMode(record_button_pin, INPUT_PULLUP);
+  pinMode(play_button_pin, INPUT_PULLUP);
 
 
 }
@@ -87,7 +99,16 @@ const char* buttonName(ButtonType button) {
     case ButtonType::RECORD: return "RECORD";
     case ButtonType::PLAY:   return "PLAY";
   }
-  return "UNKNOWN";
+  return "SPOOKY UNKNOWN BUTTON";
+}
+
+const char* stateName(State state) {
+  switch (state) {
+    case THEREMIN_STATE: return "New State: Theremin";
+    case RECORD_STATE: return "New State: Record";
+    case PLAY_STATE:   return "New State: Play";
+  }
+  return "Spooky unknown state";
 }
 
 bool buttonToggle(
@@ -120,6 +141,11 @@ void loop() {
   bool recordButtonReading = digitalRead(record_button_pin);
   bool recordJustPressed = buttonToggle(ButtonType::RECORD, recordButtonReading, lastRecordButtonRead, recordButtonPressed);
   // ----------------------------------------------
+  
+  // ------ play button control ------
+  bool playButtonReading = digitalRead(play_button_pin);
+  bool playJustPressed = buttonToggle(ButtonType::PLAY, playButtonReading, lastPlayButtonRead, playButtonPressed);
+  // ----------------------------------------------
 
   distance = sensor.Distance();
   //Serial.println(distance);
@@ -127,6 +153,11 @@ void loop() {
   // NOTE_B5 = higher pitch
   //NOTE_F1 = lower pitch
   int frequency = map(distance, 0, 100, NOTE_B5, NOTE_F1);
+
+  if (previousState != currentState) {
+    Serial.println(stateName(currentState));
+    previousState = currentState;
+  }
 
 
   // states 
@@ -143,7 +174,13 @@ void loop() {
         recordStartTime = millis();
         currentNote = -1;
         noteCounter = 0;
-        Serial.println("Transition from THEREMIN to RECORDING");
+      }
+
+      if (playJustPressed) {
+        currentState = PLAY_STATE;
+        playNoteIndex = 0;
+        tone(buzzer_pin, recordedNotes[0].noteFrequency);
+        playNoteStartTime = millis();
       }
       break;
     case RECORD_STATE: {
@@ -185,8 +222,27 @@ void loop() {
           noteStartTime = millis();
         }
       }
+      break;
     }
     case PLAY_STATE:
+     if (volumeButtonPressed) {
+        noTone(buzzer_pin);
+        currentState = THEREMIN_STATE;
+        break;
+      }
+      unsigned long timeElapsed = millis() - playNoteStartTime;
+      if (timeElapsed >= recordedNotes[playNoteIndex].noteDuration) {
+        playNoteIndex++;
+        if(playNoteIndex >= MAX_RECORDED_NOTES) {
+          noTone(buzzer_pin);
+          Serial.println("SONG OVER!");
+          currentState = THEREMIN_STATE;
+          break;
+        } else {
+          tone(buzzer_pin, recordedNotes[playNoteIndex].noteFrequency);
+          playNoteStartTime = millis();
+        }
+      }
       break;
   }
 }
