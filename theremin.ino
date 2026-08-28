@@ -152,7 +152,8 @@ void loop() {
 
   // NOTE_B5 = higher pitch
   //NOTE_F1 = lower pitch
-  int frequency = map(distance, 0, 100, NOTE_B5, NOTE_F1);
+  // int frequency = map(distance, 0, 100, NOTE_B5, NOTE_F1);
+  int frequency = map(distance, 0, 100, NOTE_C5, NOTE_F1);
 
   if (previousState != currentState) {
     Serial.println(stateName(currentState));
