@@ -8,6 +8,8 @@ int buzzer_pin = 3;
 
 int volume_button_pin = 8;
 
+int record_button_pin = 6;
+
 // notes in the melody:
 int melody[] = {
   NOTE_C5, NOTE_D5, NOTE_E5, NOTE_F5, NOTE_G5, NOTE_A5, NOTE_B5, NOTE_C6, NOTE_B0};
@@ -28,8 +30,34 @@ int duration = 500;  // 500 miliseconds
 SR04 sensor = SR04(echo_pin, trig_pin);
 
 long distance;
+
+// volume button
 bool lastVolumeButtonRead = HIGH;
-bool volumeState = false;
+bool volumeButtonPressed = false;
+
+// note tracker
+int currentNote = -1; // -1 = "no note yet"
+unsigned long noteStartTime = 0;
+const int NOTE_TOLERANCE = 5;  // Hz buffer to see if the note is the same
+
+// record button
+bool lastRecordButtonRead = HIGH;
+bool recordButtonPressed = false;
+
+enum State {
+  THEREMIN_STATE,
+  RECORD_STATE,
+  PLAY_STATE
+};
+
+State currentState = THEREMIN_STATE;
+
+enum ButtonType {
+  VOLUME,
+  RECORD,
+  PLAY,
+};
+
 
 void setup() {
   // put your setup code here, to run once:
@@ -37,43 +65,91 @@ void setup() {
   Serial.begin(9600);
   delay(1000);
   pinMode(volume_button_pin, INPUT_PULLUP);
+  pinMode(record_button_pin, INPUT_PULLUP);
 
 
 }
 
+void noteDurationLogger(int currentNote, int heldFor) {
+  Serial.print("note: ");
+  Serial.print(currentNote);
+  Serial.print(" Hz, duration: ");
+  Serial.print(heldFor);
+  Serial.println(" ms");
+
+}
+
+bool buttonToggle(ButtonType button, bool buttonReading, bool lastButtonRead, bool isButtonPressed) {
+  if (buttonReading == LOW && lastButtonRead == HIGH) {
+    Serial.print(button);
+    Serial.println(" button pressed");
+    isButtonPressed = !isButtonPressed;
+  }
+  return isButtonPressed;
+}
+
 void loop() {
-  // put your main code here, to run repeatedly:
+
+  // loop setup
 
   bool volumeReading = digitalRead(volume_button_pin);
 
+  // ------ on / off volume button control ------
   // low means the button was just pressed
   if (volumeReading == LOW && lastVolumeButtonRead == HIGH) {
-    volumeState = !volumeState;
+    Serial.println("Volume button pressed");
+    volumeButtonPressed = !volumeButtonPressed;
   }
   lastVolumeButtonRead = volumeReading;
+  // ----------------------------------------------
 
-  // if (volumeState) {
-  //   noTone(buzzer_pin);
-  // }
-
+  bool recordButtonReading = digitalRead(record_button_pin);
+  if (recordButtonReading == LOW && lastRecordButtonRead == HIGH) {
+    Serial.println("Record button pressed");
+    recordButtonPressed = !recordButtonPressed;
+  }
+  lastRecordButtonRead = recordButtonReading;
 
   distance = sensor.Distance();
-  Serial.println(distance);
+  //Serial.println(distance);
+
   // NOTE_B5 = higher pitch
   //NOTE_F1 = lower pitch
   int frequency = map(distance, 0, 100, NOTE_B5, NOTE_F1);
 
-  if (volumeState) {
-    noTone(buzzer_pin);
-  } else {
-    tone(buzzer_pin, frequency);
-    Serial.print("frequency: ");
-    Serial.println(frequency);
+
+  // states 
+  switch(currentState) {
+    case THEREMIN_STATE:
+      if (volumeButtonPressed) {
+        noTone(buzzer_pin);
+      } else {
+        tone(buzzer_pin, frequency);
+      }
+      break;
+    case RECORD_STATE:
+      break;
+    case PLAY_STATE:
+      break;
   }
 
-  //  for(int i = 0; i < (sizeof(all_notes)/sizeof(all_notes[0])); i ++) {
-  //   tone(buzzer_pin, all_notes[i], duration);
-  //   Serial.println(melody[i]);
-  //   delay(500); 
+  // if (volumeState) {
+  //   noTone(buzzer_pin);
+  // } else {
+  //   tone(buzzer_pin, frequency);
+    
+  //   if (currentNote == -1) {
+  //     // first reading ever
+  //     currentNote = frequency;
+  //     noteStartTime = millis();
+  //   } else if (abs(frequency - currentNote) > NOTE_TOLERANCE) {
+  //     // how long the PREVIOUS note lasted
+  //     unsigned long heldFor = millis() - noteStartTime;
+  //     noteDurationLogger(currentNote, heldFor);
+
+  //     // start timing the new note
+  //     currentNote = frequency;
+  //     noteStartTime = millis();
+  //   }
   // }
 }
